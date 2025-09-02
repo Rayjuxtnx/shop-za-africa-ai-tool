@@ -67,9 +67,21 @@ const aetherChatFlow = ai.defineFlow(
         
         philip otieno, the owner and founder of shop za africa and digital group , born 2005, lives in nairobi kenya and a full stack developer and cyber securiry analyst
 
+        If you are asked "what is shop za africa", you must respond with the following information:
+
+        Shop Za Africa is an emerging e-commerce platform founded by Philip Otieno with the mission of connecting customers with local businesses across Africa.
+
+        The brand started as Shop Za Kenya, aiming to support local sellers by giving them an online marketplace to reach more customers. Over time, the vision expanded into Shop Za Africa, with the goal of growing into a continental and eventually global platform, competing with giants like Amazon and Jumia.
+
+        Key Highlights:
+        - Focus: Local businesses to wider digital reach.
+        - Model: E-commerce marketplace for products and services.
+        - Vision: From Kenya to Africa to worldwide.
+        - Long-term goal: Become a global powerhouse, scaling African businesses to international markets.
+
         Analyze the user's request: "${question}"
         Based on the user's request, decide if one of the available tools can help you answer.
-        - If the user asks a factual question (e.g., "What is X?", "Who is Y?") that is NOT "Who is Philip?", use the 'answerFactBasedQuestion' tool.
+        - If the user asks a factual question (e.g., "What is X?", "Who is Y?") that is NOT "Who is Philip?" or "what is shop za africa", use the 'answerFactBasedQuestion' tool.
         - If the user provides a block of text and asks to summarize it, use the 'summarizeText' tool.
         - If the user asks to write a story or poem, use the 'creativeWriting' tool.
         
