@@ -1,14 +1,18 @@
 'use server';
 
 import { aetherChat } from '@/ai/flows/aether-chat';
+import { AetherChatInputSchema } from '@/ai/schemas';
+import { z } from 'zod';
 
-export async function getAiResponse(question: string): Promise<{ data?: string; error?: string }> {
-  if (!question) {
-    return { error: 'Question is required.' };
+export async function getAiResponse(input: z.infer<typeof AetherChatInputSchema>): Promise<{ data?: string; error?: string }> {
+  const parsedInput = AetherChatInputSchema.safeParse(input);
+
+  if (!parsedInput.success) {
+    return { error: 'Invalid input.' };
   }
 
   try {
-    const response = await aetherChat(question);
+    const response = await aetherChat(parsedInput.data);
     return { data: response };
   } catch (error) {
     console.error('Error getting AI response:', error);

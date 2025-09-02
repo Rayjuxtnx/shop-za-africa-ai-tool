@@ -182,6 +182,7 @@ export default function HomePage() {
     };
 
     const currentMessages = messages[0]?.id === '0' ? [] : messages;
+    const history = currentMessages.map(({ role, content }) => ({ role, content }));
     let newMessages = [...currentMessages, optimisticUserMessage];
     setMessages(newMessages);
     
@@ -234,7 +235,7 @@ export default function HomePage() {
         }
     }
     
-    const result = await getAiResponse(userInput);
+    const result = await getAiResponse({ history, question: userInput });
     
     if (result.error) {
       toast({

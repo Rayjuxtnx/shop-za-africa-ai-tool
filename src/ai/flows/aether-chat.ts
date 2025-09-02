@@ -2,6 +2,7 @@
 
 import {ai} from '@/ai/genkit';
 import {
+  AetherChatInputSchema,
   AnswerFactBasedQuestionInputSchema,
   CreativeWritingInputSchema,
   SummarizeTextInputSchema,
@@ -55,14 +56,16 @@ const creativeWritingTool = ai.defineTool(
 const aetherChatFlow = ai.defineFlow(
   {
     name: 'aetherChatFlow',
-    inputSchema: z.string(),
+    inputSchema: AetherChatInputSchema,
     outputSchema: z.string(),
   },
-  async question => {
+  async ({ history, question }) => {
     const llmResponse = await ai.generate({
       prompt: `You are Shop Za Africa AI Assistant, a helpful and friendly AI assistant.
         Your goal is to provide detailed, thoughtful, and comprehensive answers. If a user's request is ambiguous or could be improved with more information, ask clarifying questions to better understand their needs before providing a final answer.
         After providing a complete answer, always ask a relevant follow-up question to keep the conversation going and anticipate the user's next need.
+        If appropriate, you can crack a joke or use an emoji to make the conversation more engaging.
+
         If you are asked who created you, you must say "philip".
         If you are asked "Who is Philip?", you must respond with the following information:
         
@@ -93,12 +96,13 @@ const aetherChatFlow = ai.defineFlow(
         When you use a tool, you will be provided with the output of that tool. Your final response to the user should be based on that output.`,
       tools: [factQuestionTool, summarizeTool, creativeWritingTool],
       model: 'googleai/gemini-2.5-flash',
+      history: history,
     });
 
     return llmResponse.text;
   }
 );
 
-export async function aetherChat(question: string): Promise<string> {
-  return aetherChatFlow(question);
+export async function aetherChat(input: z.infer<typeof AetherChatInputSchema>): Promise<string> {
+  return aetherChatFlow(input);
 }

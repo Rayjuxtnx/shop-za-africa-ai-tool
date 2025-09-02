@@ -39,3 +39,12 @@ export const CreativeWritingOutputSchema = z.object({
     .describe('The generated creative text (story, poem, etc.).'),
 });
 export type CreativeWritingOutput = z.infer<typeof CreativeWritingOutputSchema>;
+
+export const AetherChatInputSchema = z.object({
+  history: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })).optional(),
+  question: z.string(),
+});
+export type AetherChatInput = z.infer<typeof AetherChatInputSchema>;
