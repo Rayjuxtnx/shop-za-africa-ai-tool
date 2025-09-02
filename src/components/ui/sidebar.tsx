@@ -145,6 +145,7 @@ const SidebarProvider = React.forwardRef<
               className
             )}
             data-state={state}
+            data-mobile={isMobile}
             ref={ref}
             {...props}
           >
@@ -327,6 +328,7 @@ const SidebarInset = React.forwardRef<
         "md:w-[calc(100%_-_var(--sidebar-width))] transition-[width] duration-200 ease-linear",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         "group-data-[state=collapsed]/sidebar-wrapper:md:w-[calc(100%_-_var(--sidebar-width-icon))]",
+        "group-data-[mobile=true]/sidebar-wrapper:w-full",
         className
       )}
       {...props}
