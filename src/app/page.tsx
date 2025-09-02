@@ -130,34 +130,20 @@ export default function Home() {
     setIsLoading(true);
     form.reset();
     
-    if (user) {
-      const { error: userMessageError } = await supabase
-          .from('messages')
-          .insert({ role: 'user', content: userInput, user_id: user.id });
-
-      if (userMessageError) {
-          toast({
-              variant: 'destructive',
-              title: 'Uh oh! Something went wrong.',
-              description: 'Failed to save your message.',
-          });
-          setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
-          setIsLoading(false);
-          return;
-      }
-    } else {
-       const { error: guestMessageError } = await supabase
+    const { error: userMessageError } = await supabase
         .from('messages')
-        .insert({ role: 'user', content: userInput, user_id: null });
-        if (guestMessageError) {
-             toast({
-              variant: 'destructive',
-              title: 'Uh oh! Something went wrong.',
-              description: 'Failed to save guest message.',
-          });
-        }
-    }
+        .insert({ role: 'user', content: userInput, user_id: user?.id ?? null });
 
+    if (userMessageError) {
+        toast({
+            variant: 'destructive',
+            title: 'Uh oh! Something went wrong.',
+            description: 'Failed to save your message.',
+        });
+        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+        setIsLoading(false);
+        return;
+    }
 
     const result = await getAiResponse(userInput);
     
@@ -176,32 +162,18 @@ export default function Home() {
             content: assistantMessageContent
         };
         
-        if (user) {
-            const { error: assistantMessageError } = await supabase
-                .from('messages')
-                .insert({ role: 'assistant', content: assistantMessageContent, user_id: user.id });
-
-            if (assistantMessageError) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Uh oh! Something went wrong.',
-                    description: 'Failed to save the AI response.',
-                });
-            }
-        } else {
-            const { error: guestAssistantMessageError } = await supabase
+        const { error: assistantMessageError } = await supabase
             .from('messages')
-            .insert({ role: 'assistant', content: assistantMessageContent, user_id: null });
+            .insert({ role: 'assistant', content: assistantMessageContent, user_id: user?.id ?? null });
 
-            if (guestAssistantMessageError) {
-                 toast({
-                    variant: 'destructive',
-                    title: 'Uh oh! Something went wrong.',
-                    description: 'Failed to save guest AI response.',
-                });
-            }
+        if (assistantMessageError) {
+            toast({
+                variant: 'destructive',
+                title: 'Uh oh! Something went wrong.',
+                description: 'Failed to save the AI response.',
+            });
         }
-
+        
         setMessages(prev => [...prev, newAssistantMessage]);
     }
     setIsLoading(false);

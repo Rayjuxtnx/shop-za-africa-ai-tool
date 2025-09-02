@@ -1,34 +1,12 @@
 /** @type {import('next').NextConfig} */
-import withPWA from 'next-pwa';
+import pwa from 'next-pwa';
+
+const withPWA = pwa({
+    dest: 'public'
+});
 
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  images: {
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'placehold.co',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port: '',
-        pathname: '/**',
-      },
-    ],
-  },
+    // your next config options
 };
 
-export default withPWA({
-  dest: 'public',
-  register: true,
-  skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-})(nextConfig);
+export default withPWA(nextConfig);
