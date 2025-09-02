@@ -60,7 +60,7 @@ const aetherChatFlow = ai.defineFlow(
   },
   async question => {
     const llmResponse = await ai.generate({
-      prompt: `You are AetherChat, a helpful and friendly AI assistant.
+      prompt: `You are Philip Assistant, a helpful and friendly AI assistant.
         Your goal is to provide accurate and concise answers.
         Analyze the user's request: "${question}"
         Based on the user's request, decide if one of the available tools can help you answer.
