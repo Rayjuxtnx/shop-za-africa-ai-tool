@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { SendHorizonal } from 'lucide-react';
+import { SendHorizonal, Bot } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 const formSchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.'),
@@ -75,15 +76,17 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-16 items-center justify-center border-b px-4">
-        <div className="flex items-center gap-2">
-          <Icons.logo className="h-6 w-6 text-primary" />
-          <h1 className="text-lg font-semibold tracking-tight">Philip Assistant</h1>
+    <div className="flex h-full flex-col bg-background">
+      <header className="flex h-16 shrink-0 items-center justify-center border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-full">
+            <Bot className="h-6 w-6 text-primary" />
+          </div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
         </div>
       </header>
-      <main className="flex-1 overflow-y-auto p-4">
-        <div className="mx-auto max-w-2xl space-y-6">
+      <main className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="mx-auto max-w-3xl space-y-8">
           {messages.map(m => (
             <ChatMessage key={m.id} message={m} />
           ))}
@@ -91,12 +94,12 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
       </main>
-      <footer className="border-t bg-card p-4">
-        <div className="mx-auto max-w-2xl">
+      <footer className="border-t border-border/50 bg-card/20 p-4 backdrop-blur-sm">
+        <div className="mx-auto max-w-3xl">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="flex items-start gap-2"
+              className="flex items-start gap-4"
             >
               <FormField
                 control={form.control}
@@ -106,7 +109,7 @@ export default function Home() {
                     <FormControl>
                       <Textarea
                         placeholder="What's 7 x 12?"
-                        className="resize-none"
+                        className="resize-none rounded-2xl border-2 border-border bg-card/50 focus-visible:ring-primary/50"
                         {...field}
                         onKeyDown={e => {
                           if (e.key === 'Enter' && !e.shiftKey) {
@@ -121,7 +124,7 @@ export default function Home() {
                   </FormItem>
                 )}
               />
-              <Button type="submit" size="icon" disabled={isLoading}>
+              <Button type="submit" size="icon" disabled={isLoading} className="rounded-full h-12 w-12 shrink-0">
                 <SendHorizonal className="h-5 w-5" />
                 <span className="sr-only">Send</span>
               </Button>

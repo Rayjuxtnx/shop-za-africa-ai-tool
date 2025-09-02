@@ -2,7 +2,7 @@
 
 import { Bot, User } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Skeleton } from './ui/skeleton';
 
 export interface Message {
@@ -16,29 +16,31 @@ export function ChatMessage({ message }: { message: Message }) {
   return (
     <div
       className={cn(
-        'flex items-start gap-3',
+        'flex items-start gap-4',
         isUser ? 'justify-end' : 'justify-start'
       )}
     >
       {!isUser && (
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary text-primary-foreground">
+        <Avatar className="h-9 w-9 border-2 border-primary/20">
+          <AvatarFallback className="bg-primary/10 text-primary">
             <Bot className="h-5 w-5" />
           </AvatarFallback>
         </Avatar>
       )}
       <div
         className={cn(
-          'max-w-[80%] rounded-lg p-3 text-sm shadow-sm',
+          'max-w-[80%] rounded-2xl p-4 text-sm shadow-md',
           isUser
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-card'
+            ? 'bg-primary text-primary-foreground rounded-br-none'
+            : 'bg-card text-foreground rounded-bl-none'
         )}
       >
-        {message.content}
+        <p className="prose prose-sm dark:prose-invert prose-p:leading-relaxed prose-pre:p-0">
+          {message.content}
+        </p>
       </div>
       {isUser && (
-        <Avatar className="h-8 w-8">
+        <Avatar className="h-9 w-9 border-2 border-border">
           <AvatarFallback className="bg-accent text-accent-foreground">
             <User className="h-5 w-5" />
           </AvatarFallback>
@@ -50,17 +52,17 @@ export function ChatMessage({ message }: { message: Message }) {
 
 export function ChatMessageLoading() {
     return (
-        <div className="flex items-start gap-3 justify-start">
-            <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground">
+        <div className="flex items-start gap-4 justify-start">
+            <Avatar className="h-9 w-9 border-2 border-primary/20">
+                <AvatarFallback className="bg-primary/10 text-primary">
                     <Bot className="h-5 w-5" />
                 </AvatarFallback>
             </Avatar>
-            <div className="bg-card max-w-[80%] rounded-lg p-3 text-sm shadow-sm">
-                <div className="flex items-center gap-1.5">
-                    <Skeleton className="h-3 w-3 rounded-full" />
-                    <Skeleton className="h-3 w-3 rounded-full" />
-                    <Skeleton className="h-3 w-3 rounded-full" />
+            <div className="bg-card max-w-[80%] rounded-2xl p-4 text-sm shadow-md rounded-bl-none">
+                <div className="flex items-center gap-2">
+                    <Skeleton className="h-3 w-3 rounded-full bg-primary/50" />
+                    <Skeleton className="h-3 w-3 rounded-full bg-primary/50" />
+                    <Skeleton className="h-3 w-3 rounded-full bg-primary/50" />
                 </div>
             </div>
         </div>
