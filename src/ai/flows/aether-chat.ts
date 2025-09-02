@@ -67,39 +67,15 @@ const aetherChatFlow = ai.defineFlow(
         - If the user asks a factual question (e.g., "What is X?", "Who is Y?"), use the 'answerFactBasedQuestion' tool.
         - If the user provides a block of text and asks to summarize it, use the 'summarizeText' tool.
         - If the user asks to write a story or poem, use the 'creativeWriting' tool.
-        If you use a tool, its output will be your final answer.
+        
         If no tool is suitable, provide a helpful, conversational response directly.
-        Do not ask clarifying questions about which tool to use. Make the decision yourself.`,
+        Do not ask clarifying questions about which tool to use. Make the decision yourself.
+        When you use a tool, you will be provided with the output of that tool. Your final response to the user should be based on that output.`,
       tools: [factQuestionTool, summarizeTool, creativeWritingTool],
       model: 'googleai/gemini-2.5-flash',
     });
 
-    const toolUse = llmResponse.toolRequest();
-    if (toolUse) {
-      const toolResponse = await toolUse.run();
-      const llmResponse2 = await ai.generate({
-        prompt: `You are AetherChat, a helpful and friendly AI assistant.
-        Your goal is to provide accurate and concise answers.
-        Analyze the user's request: "${question}"
-        Based on the user's request, decide if one of the available tools can help you answer.
-        - If the user asks a factual question (e.g., "What is X?", "Who is Y?"), use the 'answerFactBasedQuestion' tool.
-        - If the user provides a block of text and asks to summarize it, use the 'summarizeText' tool.
-        - If the user asks to write a story or poem, use the 'creativeWriting' tool.
-        If you use a tool, its output will be your final answer.
-        If no tool is suitable, provide a helpful, conversational response directly.
-        Do not ask clarifying questions about which tool to use. Make the decision yourself.`,
-        tools: [factQuestionTool, summarizeTool, creativeWritingTool],
-        model: 'googleai/gemini-2.5-flash',
-        history: [
-          {role: 'user', content: [{text: question}]},
-          llmResponse.message,
-          {role: 'tool', content: [toolResponse]},
-        ],
-      });
-      return llmResponse2.text;
-    } else {
-      return llmResponse.text;
-    }
+    return llmResponse.text;
   }
 );
 
