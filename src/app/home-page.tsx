@@ -2,7 +2,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Bot, LogIn, LogOut, MessageSquare, SendHorizonal, UserPlus, PlusCircle, RefreshCw } from 'lucide-react';
+import { Bot, LogIn, LogOut, MessageSquare, SendHorizonal, UserPlus, PlusCircle, RefreshCw, Info } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -19,6 +19,15 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
 import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarMenuSkeleton, SidebarInset } from '@/components/ui/sidebar';
 import { cn } from '@/lib/utils';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+
 
 type Session = {
   id: string;
@@ -118,10 +127,10 @@ export default function HomePage() {
 
   // Fetch sessions for logged in user
   useEffect(() => {
-    if (user) {
+    if (user && authChecked) {
       fetchSessions();
     }
-  }, [user, fetchSessions]);
+  }, [user, authChecked, fetchSessions]);
 
   // Fetch messages for active session
   useEffect(() => {
@@ -150,7 +159,7 @@ export default function HomePage() {
         setMessages([initialMessage]);
       }
     };
-    if (user && authChecked) {
+    if (authChecked) {
         fetchMessages();
     }
   }, [user, activeSessionId, toast, authChecked]);
@@ -327,6 +336,25 @@ export default function HomePage() {
             <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
           </div>
           <div className="flex items-center gap-2">
+             <Dialog>
+                <DialogTrigger asChild>
+                   <Button variant="ghost" size="icon" aria-label="About us">
+                      <Info className="h-5 w-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>About Philip Assistant</DialogTitle>
+                    <DialogDescription>
+                      This is an AI-powered chat application built by Philip Otieno. 
+                      You can ask it questions, have it summarize text, or even ask it to write a story. 
+                      Your conversations are private and secure. 
+                      Log in to save and view your chat history.
+                    </DialogDescription>
+                  </DialogHeader>
+                </DialogContent>
+              </Dialog>
+
               {user ? (
                   <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out">
                       <LogOut className="h-5 w-5" />
