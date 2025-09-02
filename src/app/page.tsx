@@ -20,6 +20,12 @@ const formSchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.'),
 });
 
+const initialMessage: Message = {
+  id: '0',
+  role: 'assistant',
+  content: 'am shop za africa ai assistant, how can i help you',
+};
+
 export default function Home() {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -46,23 +52,10 @@ export default function Home() {
         
       if (error) {
         console.error('Error fetching messages:', error);
-        // Set a default initial message if fetching fails
-        setMessages([
-          {
-            id: '1',
-            role: 'assistant',
-            content: 'am shop za africa ai assistant, how can i help you',
-          },
-        ]);
+        setMessages([initialMessage]);
       } else {
         if (data.length === 0) {
-           setMessages([
-            {
-              id: '1',
-              role: 'assistant',
-              content: 'am shop za africa ai assistant, how can i help you',
-            },
-          ]);
+           setMessages([initialMessage]);
         } else {
           setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
         }
@@ -79,22 +72,31 @@ export default function Home() {
     const userInput = values.message;
     const userMessage: Omit<Message, 'id'> = { role: 'user', content: userInput };
 
+    // Optimistically add user message to the UI
+    const tempId = String(Date.now());
+    const optimisticUserMessage = { ...userMessage, id: tempId };
+    const newMessages = messages.filter(m => m.id !== '0');
+    setMessages(prev => [...newMessages, optimisticUserMessage]);
+
+    setIsLoading(true);
+    form.reset();
+
     const { data: userMessageData, error: userMessageError } = await supabase.from('messages').insert(userMessage).select().single();
+    
     if (userMessageError) {
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
         description: 'Failed to save your message.',
       });
+      // Revert optimistic update
+      setMessages(prev => prev.filter(m => m.id !== tempId));
+      setIsLoading(false);
       return;
     }
 
-    setMessages(prev => [
-      ...prev,
-      {...userMessage, id: String(userMessageData.id) },
-    ]);
-    setIsLoading(true);
-    form.reset();
+    // Replace optimistic message with real one from DB
+    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: String(userMessageData.id) } : m));
 
     const result = await getAiResponse(userInput);
     
@@ -105,7 +107,7 @@ export default function Home() {
         description: result.error,
       });
       await supabase.from('messages').delete().eq('id', userMessageData.id);
-      setMessages(prev => prev.slice(0, -1));
+      setMessages(prev => prev.filter(m => m.id !== String(userMessageData.id)));
     } else {
         const assistantMessage: Omit<Message, 'id'> = { role: 'assistant', content: result.data! };
         const { data: assistantMessageData, error: assistantMessageError } = await supabase.from('messages').insert(assistantMessage).select().single();
