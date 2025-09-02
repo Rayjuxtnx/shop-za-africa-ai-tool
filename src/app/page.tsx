@@ -120,7 +120,6 @@ export default function Home() {
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const userInput = values.message;
     
-    // Optimistic UI update
     const optimisticUserMessage: Message = { 
         id: String(Date.now()), 
         role: 'user', 
@@ -132,14 +131,13 @@ export default function Home() {
     setIsLoading(true);
     form.reset();
 
-    // Save message if user is logged in or if it's a guest message
-    if (user || !user) {
+    if (user) {
         const { error } = await supabase
             .from('messages')
             .insert({ 
                 role: 'user', 
                 content: userInput, 
-                user_id: user?.id ?? null 
+                user_id: user.id 
             });
 
         if (error) {
@@ -148,7 +146,6 @@ export default function Home() {
                 title: 'Uh oh! Something went wrong.',
                 description: 'Failed to save your message.',
             });
-            // Revert optimistic update
             setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
             setIsLoading(false);
             return;
@@ -163,7 +160,6 @@ export default function Home() {
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
-      // Revert user message on AI error
        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
     } else {
         const assistantMessageContent = result.data!;
@@ -173,14 +169,13 @@ export default function Home() {
             content: assistantMessageContent
         };
         
-        // Save assistant message if user is logged in or if it's a guest
-        if (user || !user) {
+        if (user) {
             const { error } = await supabase
                 .from('messages')
                 .insert({ 
                     role: 'assistant', 
                     content: assistantMessageContent, 
-                    user_id: user?.id ?? null 
+                    user_id: user.id 
                 });
 
             if (error) {
@@ -249,6 +244,14 @@ export default function Home() {
       </header>
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl space-y-8 pb-32">
+          {!user && (
+            <div className="rounded-lg border border-border bg-card p-4 text-center text-sm text-muted-foreground">
+              <Link href="/login" className="font-medium text-primary hover:underline">
+                Login
+              </Link>{' '}
+              to track your history.
+            </div>
+          )}
           {messages.map(m => (
             <ChatMessage key={m.id} message={m} />
           ))}
