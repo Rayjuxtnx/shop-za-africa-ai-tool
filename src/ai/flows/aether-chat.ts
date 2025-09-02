@@ -3,9 +3,9 @@
 import {ai} from '@/ai/genkit';
 import {
   answerFactBasedQuestion,
-  AnswerFactBasedQuestionInputSchema,
 } from './answer-fact-based-questions';
-import {summarizeText, SummarizeTextInputSchema} from './summarize-text';
+import {summarizeText} from './summarize-text';
+import { AnswerFactBasedQuestionInputSchema, SummarizeTextInputSchema } from '@/ai/schemas';
 import {z} from 'genkit';
 
 const factQuestionTool = ai.defineTool(
@@ -77,9 +77,9 @@ const aetherChatFlow = ai.defineFlow(
           {role: 'tool', content: [{toolResponse}]},
         ],
       });
-      return llmResponse2.text();
+      return llmResponse2.text;
     } else {
-      return llmResponse.text();
+      return llmResponse.text;
     }
   }
 );

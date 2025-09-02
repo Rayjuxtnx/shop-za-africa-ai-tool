@@ -9,17 +9,9 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import type { SummarizeTextInput, SummarizeTextOutput } from '@/ai/schemas';
+import { SummarizeTextInputSchema, SummarizeTextOutputSchema } from '@/ai/schemas';
 
-export const SummarizeTextInputSchema = z.object({
-  text: z.string().describe('The text to summarize.'),
-});
-export type SummarizeTextInput = z.infer<typeof SummarizeTextInputSchema>;
-
-const SummarizeTextOutputSchema = z.object({
-  summary: z.string().describe('The summary of the text.'),
-});
-export type SummarizeTextOutput = z.infer<typeof SummarizeTextOutputSchema>;
 
 export async function summarizeText(input: SummarizeTextInput): Promise<SummarizeTextOutput> {
   return summarizeTextFlow(input);

@@ -8,21 +8,8 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-
-export const AnswerFactBasedQuestionInputSchema = z.object({
-  question: z.string().describe('The fact-based question to be answered.'),
-});
-export type AnswerFactBasedQuestionInput = z.infer<
-  typeof AnswerFactBasedQuestionInputSchema
->;
-
-const AnswerFactBasedQuestionOutputSchema = z.object({
-  answer: z.string().describe('The answer to the fact-based question.'),
-});
-export type AnswerFactBasedQuestionOutput = z.infer<
-  typeof AnswerFactBasedQuestionOutputSchema
->;
+import type { AnswerFactBasedQuestionInput, AnswerFactBasedQuestionOutput } from '@/ai/schemas';
+import { AnswerFactBasedQuestionInputSchema, AnswerFactBasedQuestionOutputSchema } from '@/ai/schemas';
 
 export async function answerFactBasedQuestion(
   input: AnswerFactBasedQuestionInput
