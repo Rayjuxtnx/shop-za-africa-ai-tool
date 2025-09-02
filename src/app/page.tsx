@@ -286,7 +286,7 @@ export default function Home() {
                     ) : (
                         sessions.map(session => (
                             <SidebarMenuItem key={session.id}>
-                                <Link href={`/?session=${session.id}`} legacyBehavior passHref>
+                                <Link href={`/?session=${session.id}`}>
                                     <SidebarMenuButton
                                         isActive={activeSessionId === session.id}
                                         className="w-full justify-start"
