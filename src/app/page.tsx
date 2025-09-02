@@ -2,12 +2,13 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Bot, LogIn, LogOut, SendHorizonal, UserPlus } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Bot, LogIn, LogOut, MessageSquare, SendHorizonal, UserPlus, PlusCircle } from 'lucide-react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { User } from '@supabase/supabase-js';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import Link from 'next/link';
 
 import { getAiResponse } from '@/app/actions';
 import { ChatMessage, ChatMessageLoading, type Message } from '@/components/chat-message';
@@ -16,7 +17,12 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
-import Link from 'next/link';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarMenuSkeleton } from '@/components/ui/sidebar';
+
+type Session = {
+  id: string;
+  name: string;
+};
 
 const formSchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.'),
@@ -30,12 +36,18 @@ const initialMessage: Message = {
 
 export default function Home() {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const activeSessionId = searchParams.get('session');
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -43,9 +55,23 @@ export default function Home() {
       message: '',
     },
   });
+  
+  const createQueryString = useCallback(
+    (name: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString())
+      params.set(name, value)
+ 
+      return params.toString()
+    },
+    [searchParams]
+  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+  
+  const handleNewChat = () => {
+    router.push(pathname);
   };
 
   useEffect(() => {
@@ -66,6 +92,8 @@ export default function Home() {
         }
         if (_event === 'SIGNED_OUT') {
             setMessages([initialMessage]);
+            setSessions([]);
+            router.push('/');
         }
       }
     );
@@ -73,16 +101,39 @@ export default function Home() {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
+  // Fetch sessions for logged in user
   useEffect(() => {
     if (user) {
-      const fetchMessages = async () => {
+      const fetchSessions = async () => {
+        setIsLoadingHistory(true);
+        const { data, error } = await supabase
+          .from('sessions')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Error fetching sessions:', error);
+        } else {
+          setSessions(data as Session[]);
+        }
+        setIsLoadingHistory(false);
+      };
+      fetchSessions();
+    }
+  }, [user]);
+
+  // Fetch messages for active session
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (user && activeSessionId) {
         setIsLoading(true);
         const { data, error } = await supabase
           .from('messages')
           .select('*')
-          .eq('user_id', user.id)
+          .eq('session_id', activeSessionId)
           .order('created_at', { ascending: true });
         setIsLoading(false);
 
@@ -95,18 +146,14 @@ export default function Home() {
           });
           setMessages([initialMessage]);
         } else {
-          if (data.length === 0) {
-            setMessages([initialMessage]);
-          } else {
-            setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
-          }
+          setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
         }
-      };
-      fetchMessages();
-    } else {
+      } else {
         setMessages([initialMessage]);
-    }
-  }, [user, toast]);
+      }
+    };
+    fetchMessages();
+  }, [user, activeSessionId, toast]);
 
   useEffect(() => {
     scrollToBottom();
@@ -114,7 +161,6 @@ export default function Home() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/');
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -125,19 +171,45 @@ export default function Home() {
         role: 'user', 
         content: userInput 
     };
-    const newMessages = messages[0]?.id === '0' ? [optimisticUserMessage] : [...messages, optimisticUserMessage];
+
+    const currentMessages = messages[0]?.id === '0' ? [] : messages;
+    const newMessages = [...currentMessages, optimisticUserMessage];
     setMessages(newMessages);
     
     setIsLoading(true);
     form.reset();
 
-    if (user) {
+    let currentSessionId = activeSessionId;
+
+    // Create a new session if one doesn't exist
+    if (!currentSessionId && user) {
+        const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
+        const { data, error } = await supabase
+            .from('sessions')
+            .insert({ user_id: user.id, name: sessionName })
+            .select('id, name')
+            .single();
+
+        if (error) {
+            console.error('Error creating session', error);
+            toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
+            setIsLoading(false);
+            setMessages(currentMessages); // Rollback optimistic update
+            return;
+        }
+        currentSessionId = data.id;
+        setSessions(prev => [data as Session, ...prev]);
+        router.push(`/?session=${data.id}`);
+    }
+
+    if (user && currentSessionId) {
         const { error } = await supabase
             .from('messages')
             .insert({ 
                 role: 'user', 
                 content: userInput, 
-                user_id: user.id 
+                user_id: user.id,
+                session_id: currentSessionId,
             });
 
         if (error) {
@@ -150,6 +222,8 @@ export default function Home() {
             setIsLoading(false);
             return;
         }
+    } else if (!user) {
+        // Guest mode, don't save to DB
     }
     
     const result = await getAiResponse(userInput);
@@ -169,13 +243,14 @@ export default function Home() {
             content: assistantMessageContent
         };
         
-        if (user) {
+        if (user && currentSessionId) {
             const { error } = await supabase
                 .from('messages')
                 .insert({ 
                     role: 'assistant', 
                     content: assistantMessageContent, 
-                    user_id: user.id 
+                    user_id: user.id,
+                    session_id: currentSessionId,
                 });
 
             if (error) {
@@ -201,106 +276,152 @@ export default function Home() {
   }
 
   return (
+    <SidebarProvider>
     <div className="flex h-screen flex-col bg-background">
-      <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-full">
-            <Bot className="h-6 w-6 text-primary" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
-        </div>
-        <div className="flex items-center gap-2">
-            {user ? (
-                <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out">
-                    <LogOut className="h-5 w-5" />
-                </Button>
-            ) : (
-                <>
-                    <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
-                        <Link href="/login">
-                            <LogIn className="mr-2 h-4 w-4" />
-                            Login
-                        </Link>
-                    </Button>
-                    <Button asChild size="sm" className="hidden sm:inline-flex">
-                        <Link href="/signup">
-                            <UserPlus className="mr-2 h-4 w-4" />
-                            Sign Up
-                        </Link>
-                    </Button>
-                     <Button asChild variant="ghost" size="icon" className="sm:hidden">
-                        <Link href="/login">
-                            <LogIn className="h-5 w-5" />
-                        </Link>
-                    </Button>
-                    <Button asChild size="icon" className="sm:hidden">
-                        <Link href="/signup">
-                            <UserPlus className="h-5 w-5" />
-                        </Link>
-                    </Button>
-                </>
-            )}
-        </div>
-      </header>
-      <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl space-y-8 pb-32">
-          {!user && (
-            <div className="rounded-lg border border-border bg-card p-4 text-center text-sm text-muted-foreground">
-              <Link href="/login" className="font-medium text-primary hover:underline">
-                Login
-              </Link>{' '}
-              to track your history.
+      {user && (
+          <Sidebar>
+              <SidebarHeader>
+                  <Button variant="outline" className="w-full" onClick={handleNewChat}>
+                      <PlusCircle className="mr-2" />
+                      New Chat
+                  </Button>
+              </SidebarHeader>
+              <SidebarContent className="p-2">
+                  <SidebarMenu>
+                      {isLoadingHistory ? (
+                          <>
+                              <SidebarMenuSkeleton showIcon />
+                              <SidebarMenuSkeleton showIcon />
+                              <SidebarMenuSkeleton showIcon />
+                          </>
+                      ) : (
+                          sessions.map(session => (
+                              <SidebarMenuItem key={session.id}>
+                                  <Link href={`/?session=${session.id}`} legacyBehavior passHref>
+                                      <SidebarMenuButton
+                                          isActive={activeSessionId === session.id}
+                                          className="w-full justify-start"
+                                      >
+                                          <MessageSquare />
+                                          <span>{session.name}</span>
+                                      </SidebarMenuButton>
+                                  </Link>
+                              </SidebarMenuItem>
+                          ))
+                      )}
+                  </SidebarMenu>
+              </SidebarContent>
+              <SidebarFooter>
+                  <p className="text-xs text-muted-foreground text-center">Your chat history</p>
+              </SidebarFooter>
+          </Sidebar>
+      )}
+      <div className="flex h-screen flex-col bg-background">
+        <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            {user && <SidebarTrigger />}
+            <div className="p-2 bg-primary/10 rounded-full">
+              <Bot className="h-6 w-6 text-primary" />
             </div>
-          )}
-          {messages.map(m => (
-            <ChatMessage key={m.id} message={m} />
-          ))}
-          {isLoading && <ChatMessageLoading />}
-          <div ref={messagesEndRef} />
-        </div>
-      </main>
-      <footer className="fixed bottom-0 left-0 right-0 border-t border-border/50 bg-card/20 p-2 backdrop-blur-sm md:p-4">
-        <div className="mx-auto max-w-3xl">
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="flex items-start gap-2 md:gap-4"
-            >
-              <FormField
-                control={form.control}
-                name="message"
-                render={({ field }) => (
-                  <FormItem className="flex-1">
-                    <FormControl>
-                      <Textarea
-                        placeholder="What's 7 x 12?"
-                        className="resize-none rounded-2xl border-2 border-border bg-card/50 focus-visible:ring-primary/50"
-                        {...field}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            if(field.value.trim()){
-                                form.handleSubmit(onSubmit)();
-                            }
-                          }
-                        }}
-                      />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" size="icon" disabled={isLoading} className="rounded-full h-12 w-12 shrink-0">
-                <SendHorizonal className="h-5 w-5" />
-                <span className="sr-only">Send</span>
-              </Button>
-            </form>
-          </Form>
-           <div className="mt-2 text-center text-xs text-muted-foreground">
-            <p>This message is encrypted. No other person can see your chats.</p>
-            <p>Avoid asking violating questions.</p>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
           </div>
-        </div>
-      </footer>
+          <div className="flex items-center gap-2">
+              {user ? (
+                  <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out">
+                      <LogOut className="h-5 w-5" />
+                  </Button>
+              ) : (
+                  <>
+                      <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+                          <Link href="/login">
+                              <LogIn className="mr-2 h-4 w-4" />
+                              Login
+                          </Link>
+                      </Button>
+                      <Button asChild size="sm" className="hidden sm:inline-flex">
+                          <Link href="/signup">
+                              <UserPlus className="mr-2 h-4 w-4" />
+                              Sign Up
+                          </Link>
+                      </Button>
+                       <Button asChild variant="ghost" size="icon" className="sm:hidden">
+                          <Link href="/login">
+                              <LogIn className="h-5 w-5" />
+                          </Link>
+                      </Button>
+                      <Button asChild size="icon" className="sm:hidden">
+                          <Link href="/signup">
+                              <UserPlus className="h-5 w-5" />
+                          </Link>
+                      </Button>
+                  </>
+              )}
+          </div>
+        </header>
+        <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="mx-auto max-w-3xl space-y-8 pb-32">
+            {!user && (
+              <div className="rounded-lg border border-border bg-card p-4 text-center text-sm text-muted-foreground">
+                <Link href="/login" className="font-medium text-primary hover:underline">
+                  Login
+                </Link>{' '}
+                to track your history.
+              </div>
+            )}
+            {messages.map(m => (
+              <ChatMessage key={m.id} message={m} />
+            ))}
+            {isLoading && <ChatMessageLoading />}
+            <div ref={messagesEndRef} />
+          </div>
+        </main>
+        <footer className="fixed bottom-0 left-0 right-0 border-t border-border/50 bg-card/20 p-2 backdrop-blur-sm md:p-4">
+          <div className="mx-auto max-w-3xl">
+            <Form {...form}>
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="flex items-start gap-2 md:gap-4"
+              >
+                <FormField
+                  control={form.control}
+                  name="message"
+                  render={({ field }) => (
+                    <FormItem className="flex-1">
+                      <FormControl>
+                        <Textarea
+                          placeholder="What's 7 x 12?"
+                          className="resize-none rounded-2xl border-2 border-border bg-card/50 focus-visible:ring-primary/50"
+                          {...field}
+                          disabled={!user && !!activeSessionId}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              if(field.value.trim()){
+                                  form.handleSubmit(onSubmit)();
+                              }
+                            }
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" size="icon" disabled={isLoading || (!user && !!activeSessionId)} className="rounded-full h-12 w-12 shrink-0">
+                  <SendHorizonal className="h-5 w-5" />
+                  <span className="sr-only">Send</span>
+                </Button>
+              </form>
+            </Form>
+             <div className="mt-2 text-center text-xs text-muted-foreground">
+              <p>This message is encrypted. No other person can see your chats.</p>
+              <p>Avoid asking violating questions.</p>
+            </div>
+          </div>
+        </footer>
+      </div>
     </div>
+    </SidebarProvider>
   );
 }
+
+    
