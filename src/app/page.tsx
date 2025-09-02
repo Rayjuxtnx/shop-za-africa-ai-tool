@@ -105,7 +105,7 @@ export default function Home() {
       fetchMessages();
     } else {
         // Guest user, reset to initial message if needed
-        if(messages.length === 0 || messages[0].id !== '0') {
+        if(messages.length === 0 || (messages.length > 0 && messages[0].id !== '0')) {
             setMessages([initialMessage]);
         }
     }
@@ -180,7 +180,8 @@ export default function Home() {
             });
         }
 
-        setMessages(prev => [...prev, assistantMessage]);
+        // We only want to add the assistant message if the optimistic user message is still there
+        setMessages(prev => prev.find(m => m.id === optimisticUserMessage.id) ? [...prev.filter(m => m.id !== optimisticUserMessage.id), { ...optimisticUserMessage, id: String(Date.now()) }, assistantMessage] : [...prev, assistantMessage]);
     }
     
     setIsLoading(false);
@@ -212,13 +213,13 @@ export default function Home() {
                 <>
                     <Button asChild variant="ghost" size="sm">
                         <Link href="/login">
-                            <LogIn className="mr-2" />
+                            <LogIn className="mr-2 h-4 w-4" />
                             Login
                         </Link>
                     </Button>
                     <Button asChild size="sm">
                         <Link href="/signup">
-                            <UserPlus className="mr-2" />
+                            <UserPlus className="mr-2 h-4 w-4" />
                             Sign Up
                         </Link>
                     </Button>
