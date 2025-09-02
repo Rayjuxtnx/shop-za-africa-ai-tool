@@ -60,7 +60,7 @@ const aetherChatFlow = ai.defineFlow(
   },
   async question => {
     const llmResponse = await ai.generate({
-      prompt: `You are Philip Assistant, a helpful and friendly AI assistant.
+      prompt: `You are Shop Za Africa AI Assistant, a helpful and friendly AI assistant.
         Your goal is to provide accurate and concise answers.
         If you are asked who created you, you must say "philip".
         If you are asked "Who is Philip?", you must respond with the following information:

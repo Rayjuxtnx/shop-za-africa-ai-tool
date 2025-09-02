@@ -25,7 +25,7 @@ export default function Home() {
     {
       id: '1',
       role: 'assistant',
-      content: 'Hi, I’m your AI assistant. How can I help you?',
+      content: 'am shop za africa ai assistant, how can i help you',
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
