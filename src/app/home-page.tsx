@@ -334,7 +334,7 @@ export default function HomePage() {
             <div className="p-2 bg-primary/10 rounded-full">
               <Bot className="h-6 w-6 text-primary" />
             </div>
-            <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
+            <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Virtual Assistant</h1>
           </div>
           <div className="flex items-center gap-2">
              <Dialog>
@@ -345,7 +345,7 @@ export default function HomePage() {
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>About Philip Assistant</DialogTitle>
+                    <DialogTitle>About Philip Virtual Assistant</DialogTitle>
                     <DialogDescription>
                       This is an AI-powered chat application built by Philip Otieno. 
                       You can ask it questions, have it summarize text, or even ask it to write a story. 
