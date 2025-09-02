@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import type { User } from '@supabase/supabase-js';
-import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 import { getAiResponse } from '@/app/actions';
@@ -17,7 +17,7 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
-import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarMenuSkeleton } from '@/components/ui/sidebar';
+import { Sidebar, SidebarProvider, SidebarTrigger, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarFooter, SidebarMenuSkeleton, SidebarInset } from '@/components/ui/sidebar';
 
 type Session = {
   id: string;
@@ -46,7 +46,6 @@ export default function Home() {
   
   const router = useRouter();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
   const activeSessionId = searchParams.get('session');
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -55,23 +54,13 @@ export default function Home() {
       message: '',
     },
   });
-  
-  const createQueryString = useCallback(
-    (name: string, value: string) => {
-      const params = new URLSearchParams(searchParams.toString())
-      params.set(name, value)
- 
-      return params.toString()
-    },
-    [searchParams]
-  )
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   
   const handleNewChat = () => {
-    router.push(pathname);
+    router.push('/');
   };
 
   useEffect(() => {
@@ -88,6 +77,7 @@ export default function Home() {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         if (_event === 'SIGNED_IN' && currentUser) {
+            router.push('/');
             setMessages([]);
         }
         if (_event === 'SIGNED_OUT') {
@@ -181,29 +171,28 @@ export default function Home() {
 
     let currentSessionId = activeSessionId;
 
-    // Create a new session if one doesn't exist
-    if (!currentSessionId && user) {
-        const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
-        const { data, error } = await supabase
-            .from('sessions')
-            .insert({ user_id: user.id, name: sessionName })
-            .select('id, name')
-            .single();
+    if (user) {
+        if (!currentSessionId) {
+            const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
+            const { data, error } = await supabase
+                .from('sessions')
+                .insert({ user_id: user.id, name: sessionName })
+                .select('id, name')
+                .single();
 
-        if (error) {
-            console.error('Error creating session', error);
-            toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
-            setIsLoading(false);
-            setMessages(currentMessages); // Rollback optimistic update
-            return;
+            if (error) {
+                console.error('Error creating session', error);
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
+                setIsLoading(false);
+                setMessages(currentMessages); // Rollback optimistic update
+                return;
+            }
+            currentSessionId = data.id;
+            setSessions(prev => [data as Session, ...prev]);
+            router.push(`/?session=${data.id}`);
         }
-        currentSessionId = data.id;
-        setSessions(prev => [data as Session, ...prev]);
-        router.push(`/?session=${data.id}`);
-    }
 
-    if (user && currentSessionId) {
-        const { error } = await supabase
+        const { error: messageError } = await supabase
             .from('messages')
             .insert({ 
                 role: 'user', 
@@ -212,7 +201,7 @@ export default function Home() {
                 session_id: currentSessionId,
             });
 
-        if (error) {
+        if (messageError) {
             toast({
                 variant: 'destructive',
                 title: 'Uh oh! Something went wrong.',
@@ -222,8 +211,6 @@ export default function Home() {
             setIsLoading(false);
             return;
         }
-    } else if (!user) {
-        // Guest mode, don't save to DB
     }
     
     const result = await getAiResponse(userInput);
@@ -277,7 +264,6 @@ export default function Home() {
 
   return (
     <SidebarProvider>
-    <div className="flex h-screen flex-col bg-background">
       {user && (
           <Sidebar>
               <SidebarHeader>
@@ -316,7 +302,7 @@ export default function Home() {
               </SidebarFooter>
           </Sidebar>
       )}
-      <div className="flex h-screen flex-col bg-background">
+      <SidebarInset className="flex h-screen flex-col bg-background">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
           <div className="flex items-center gap-3">
             {user && <SidebarTrigger />}
@@ -392,7 +378,7 @@ export default function Home() {
                           placeholder="What's 7 x 12?"
                           className="resize-none rounded-2xl border-2 border-border bg-card/50 focus-visible:ring-primary/50"
                           {...field}
-                          disabled={!user && !!activeSessionId}
+                          disabled={isLoading}
                           onKeyDown={e => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault();
@@ -406,7 +392,7 @@ export default function Home() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" size="icon" disabled={isLoading || (!user && !!activeSessionId)} className="rounded-full h-12 w-12 shrink-0">
+                <Button type="submit" size="icon" disabled={isLoading} className="rounded-full h-12 w-12 shrink-0">
                   <SendHorizonal className="h-5 w-5" />
                   <span className="sr-only">Send</span>
                 </Button>
@@ -418,8 +404,7 @@ export default function Home() {
             </div>
           </div>
         </footer>
-      </div>
-    </div>
+      </SidebarInset>
     </SidebarProvider>
   );
 }
