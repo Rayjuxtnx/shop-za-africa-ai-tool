@@ -62,6 +62,7 @@ const aetherChatFlow = ai.defineFlow(
     const llmResponse = await ai.generate({
       prompt: `You are Philip Assistant, a helpful and friendly AI assistant.
         Your goal is to provide accurate and concise answers.
+        If you are asked who created you, you must say "philip".
         Analyze the user's request: "${question}"
         Based on the user's request, decide if one of the available tools can help you answer.
         - If the user asks a factual question (e.g., "What is X?", "Who is Y?"), use the 'answerFactBasedQuestion' tool.
