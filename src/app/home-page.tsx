@@ -2,7 +2,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Bot, LogIn, LogOut, MessageSquare, SendHorizonal, UserPlus, PlusCircle } from 'lucide-react';
+import { Bot, LogIn, LogOut, MessageSquare, SendHorizonal, UserPlus, PlusCircle, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -63,6 +63,28 @@ export default function HomePage() {
     router.push('/');
   };
 
+  const fetchSessions = useCallback(async () => {
+      if (!user) return;
+      setIsLoadingHistory(true);
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('id, name')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching sessions:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: 'Could not fetch your chat history.'
+        });
+      } else {
+        setSessions(data as Session[]);
+      }
+      setIsLoadingHistory(false);
+    }, [user, toast]);
+
   useEffect(() => {
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -96,24 +118,9 @@ export default function HomePage() {
   // Fetch sessions for logged in user
   useEffect(() => {
     if (user) {
-      const fetchSessions = async () => {
-        setIsLoadingHistory(true);
-        const { data, error } = await supabase
-          .from('sessions')
-          .select('id, name')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
-        
-        if (error) {
-          console.error('Error fetching sessions:', error);
-        } else {
-          setSessions(data as Session[]);
-        }
-        setIsLoadingHistory(false);
-      };
       fetchSessions();
     }
-  }, [user]);
+  }, [user, fetchSessions]);
 
   // Fetch messages for active session
   useEffect(() => {
@@ -270,10 +277,15 @@ export default function HomePage() {
     <SidebarProvider>
         <Sidebar>
             <SidebarHeader>
-                <Button variant="outline" className="w-full" onClick={handleNewChat}>
-                    <PlusCircle className="mr-2" />
-                    New Chat
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" className="w-full" onClick={handleNewChat}>
+                        <PlusCircle className="mr-2" />
+                        New Chat
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={fetchSessions} disabled={isLoadingHistory} aria-label="Refresh history">
+                        <RefreshCw className={cn("h-4 w-4", isLoadingHistory && "animate-spin")} />
+                    </Button>
+                </div>
             </SidebarHeader>
             <SidebarContent className="p-2">
                 <SidebarMenu>
