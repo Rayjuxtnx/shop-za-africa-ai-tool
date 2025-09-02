@@ -419,7 +419,7 @@ export default function HomePage() {
                     <FormItem className="flex-1">
                       <FormControl>
                         <Textarea
-                          placeholder="What's 7 x 12?"
+                          placeholder="Ask me anything..."
                           className="resize-none rounded-2xl border-2 border-border bg-card/50 focus-visible:ring-primary/50"
                           {...field}
                           disabled={isLoading}
@@ -452,3 +452,5 @@ export default function HomePage() {
     </SidebarProvider>
   );
 }
+
+    
