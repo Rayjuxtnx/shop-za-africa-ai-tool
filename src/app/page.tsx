@@ -70,8 +70,6 @@ export default function Home() {
       setAuthChecked(true);
     };
 
-    checkUser();
-
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         const currentUser = session?.user ?? null;
@@ -87,6 +85,8 @@ export default function Home() {
         }
       }
     );
+
+    checkUser();
 
     return () => {
       authListener.subscription.unsubscribe();
@@ -142,10 +142,10 @@ export default function Home() {
         setMessages([initialMessage]);
       }
     };
-    if (user) {
+    if (user && authChecked) {
         fetchMessages();
     }
-  }, [user, activeSessionId, toast]);
+  }, [user, activeSessionId, toast, authChecked]);
 
   useEffect(() => {
     scrollToBottom();
@@ -348,7 +348,7 @@ export default function Home() {
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="mx-auto max-w-3xl space-y-8 pb-32">
-            {!user && (
+            {!user && authChecked && (
               <div className="rounded-lg border border-border bg-card p-4 text-center text-sm text-muted-foreground">
                 <Link href="/login" className="font-medium text-primary hover:underline">
                   Login
@@ -410,3 +410,5 @@ export default function Home() {
     </SidebarProvider>
   );
 }
+
+    
