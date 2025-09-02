@@ -174,104 +174,100 @@ export default function HomePage() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const userInput = values.message;
-    
-    const optimisticUserMessage: Message = { 
-        id: String(Date.now()), 
-        role: 'user', 
-        content: userInput 
-    };
-
-    const currentMessages = messages[0]?.id === '0' ? [] : messages;
-    const history = currentMessages.map(({ role, content }) => ({ role: role as 'user' | 'assistant', content }));
-    let newMessages = [...currentMessages, optimisticUserMessage];
-    setMessages(newMessages);
-    
     setIsLoading(true);
     form.reset();
 
+    const currentMessages = messages[0]?.id === '0' ? [] : messages;
+    const history = currentMessages.map(({ role, content }) => ({ role: role as 'user' | 'assistant', content }));
+
+    const optimisticUserMessage: Message = {
+      id: String(Date.now()),
+      role: 'user',
+      content: userInput,
+    };
+    
     let currentSessionId = activeSessionId;
+    let newMessages = [...currentMessages, optimisticUserMessage];
 
-    if (user) {
-        if (!currentSessionId) {
-            const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
-            const { data, error } = await supabase
-                .from('sessions')
-                .insert({ user_id: user.id, name: sessionName })
-                .select('id, name')
-                .single();
+    // If it's a new chat, create a session first
+    if (user && !currentSessionId) {
+      const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
+      const { data, error } = await supabase
+        .from('sessions')
+        .insert({ user_id: user.id, name: sessionName })
+        .select('id, name')
+        .single();
 
-            if (error) {
-                console.error('Error creating session', error);
-                toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
-                setIsLoading(false);
-                setMessages(currentMessages); // Rollback optimistic update
-                return;
-            }
-            currentSessionId = data.id;
-            setSessions(prev => [data as Session, ...prev]);
-            router.push(`/?session=${data.id}`, { scroll: false });
-            newMessages = [optimisticUserMessage]; // Start new chat view
-            setMessages(newMessages);
-        }
-
-        const { error: messageError } = await supabase
-            .from('messages')
-            .insert({ 
-                role: 'user', 
-                content: userInput, 
-                user_id: user.id,
-                session_id: currentSessionId,
-            });
-
-        if (messageError) {
-            toast({
-                variant: 'destructive',
-                title: 'Uh oh! Something went wrong.',
-                description: 'Failed to save your message.',
-            });
-            setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
-            setIsLoading(false);
-            return;
-        }
+      if (error) {
+        console.error('Error creating session', error);
+        toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
+        setIsLoading(false);
+        return;
+      }
+      
+      currentSessionId = data.id;
+      setSessions(prev => [data as Session, ...prev]);
+      router.push(`/?session=${data.id}`, { scroll: false });
+      newMessages = [optimisticUserMessage]; // For a new chat, only show the new message
     }
     
+    setMessages(newMessages);
+
+    // Save user message to DB if logged in
+    if (user && currentSessionId) {
+      const { error: messageError } = await supabase.from('messages').insert({
+        role: 'user',
+        content: userInput,
+        user_id: user.id,
+        session_id: currentSessionId,
+      });
+
+      if (messageError) {
+        toast({
+          variant: 'destructive',
+          title: 'Uh oh! Something went wrong.',
+          description: 'Failed to save your message.',
+        });
+        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id)); // Rollback
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const result = await getAiResponse({ history, question: userInput });
-    
+
     if (result.error) {
       toast({
         variant: 'destructive',
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
-       setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+      setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
     } else {
-        const assistantMessageContent = result.data!;
-        const newAssistantMessage: Message = {
-            id: String(Date.now() + 1),
-            role: 'assistant',
-            content: assistantMessageContent
-        };
-        
-        if (user && currentSessionId) {
-            const { error } = await supabase
-                .from('messages')
-                .insert({ 
-                    role: 'assistant', 
-                    content: assistantMessageContent, 
-                    user_id: user.id,
-                    session_id: currentSessionId,
-                });
+      const assistantMessageContent = result.data!;
+      const newAssistantMessage: Message = {
+        id: String(Date.now() + 1),
+        role: 'assistant',
+        content: assistantMessageContent,
+      };
 
-            if (error) {
-                toast({
-                    variant: 'destructive',
-                    title: 'Uh oh! Something went wrong.',
-                    description: 'Failed to save the AI response.',
-                });
-            }
+      if (user && currentSessionId) {
+        const { error } = await supabase.from('messages').insert({
+          role: 'assistant',
+          content: assistantMessageContent,
+          user_id: user.id,
+          session_id: currentSessionId,
+        });
+
+        if (error) {
+          toast({
+            variant: 'destructive',
+            title: 'Uh oh! Something went wrong.',
+            description: 'Failed to save the AI response.',
+          });
         }
-        
-        setMessages(prev => [...prev, newAssistantMessage]);
+      }
+      setMessages(prev => [...prev, newAssistantMessage]);
     }
     setIsLoading(false);
   }
@@ -453,7 +449,3 @@ export default function HomePage() {
     </SidebarProvider>
   );
 }
-
-    
-
-    
