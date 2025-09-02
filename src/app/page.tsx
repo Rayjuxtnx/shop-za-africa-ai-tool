@@ -60,11 +60,9 @@ export default function Home() {
       (_event, session) => {
         setUser(session?.user ?? null);
         if (_event === 'SIGNED_IN') {
-            // On sign-in, clear guest messages and fetch user's history
             setMessages([]);
         }
         if (_event === 'SIGNED_OUT') {
-            // On sign-out, revert to initial guest state
             setMessages([initialMessage]);
         }
       }
@@ -104,12 +102,12 @@ export default function Home() {
       };
       fetchMessages();
     } else {
-        // Guest user, reset to initial message if needed
         if(messages.length === 0 || (messages.length > 0 && messages[0].id !== '0')) {
             setMessages([initialMessage]);
         }
     }
-  }, [user, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -117,7 +115,7 @@ export default function Home() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/'); // Go to home page as guest
+    router.push('/');
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
@@ -128,29 +126,33 @@ export default function Home() {
         content: userInput 
     };
 
+    // Replace initial message if it exists
     const newMessages = messages[0]?.id === '0' ? [] : messages;
-    setMessages(prev => [...newMessages, optimisticUserMessage]);
+    setMessages([...newMessages, optimisticUserMessage]);
     
     setIsLoading(true);
     form.reset();
 
-    const { error: userMessageError } = await supabase
-        .from('messages')
-        .insert({ role: 'user', content: userInput, user_id: user?.id });
+    // Save user message if logged in
+    if (user) {
+      const { error: userMessageError } = await supabase
+          .from('messages')
+          .insert({ role: 'user', content: userInput, user_id: user.id });
 
-    if (userMessageError) {
-        toast({
-            variant: 'destructive',
-            title: 'Uh oh! Something went wrong.',
-            description: 'Failed to save your message.',
-        });
-        // Revert optimistic update
-        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
-        setIsLoading(false);
-        return;
+      if (userMessageError) {
+          toast({
+              variant: 'destructive',
+              title: 'Uh oh! Something went wrong.',
+              description: 'Failed to save your message.',
+          });
+          setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+          setIsLoading(false);
+          return;
+      }
     }
 
     const result = await getAiResponse(userInput);
+    setIsLoading(false);
     
     if (result.error) {
       toast({
@@ -158,33 +160,32 @@ export default function Home() {
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
-       // Revert optimistic update
        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
     } else {
         const assistantMessageContent = result.data!;
-        const assistantMessage: Message = {
+        const newAssistantMessage: Message = {
             id: String(Date.now() + 1),
             role: 'assistant',
             content: assistantMessageContent
         };
         
-         const { error: assistantMessageError } = await supabase
-            .from('messages')
-            .insert({ role: 'assistant', content: assistantMessageContent, user_id: user?.id });
+        // Save assistant message if logged in
+        if (user) {
+          const { error: assistantMessageError } = await supabase
+              .from('messages')
+              .insert({ role: 'assistant', content: assistantMessageContent, user_id: user.id });
 
-        if (assistantMessageError) {
-            toast({
-                variant: 'destructive',
-                title: 'Uh oh! Something went wrong.',
-                description: 'Failed to save the AI response.',
-            });
+          if (assistantMessageError) {
+              toast({
+                  variant: 'destructive',
+                  title: 'Uh oh! Something went wrong.',
+                  description: 'Failed to save the AI response.',
+              });
+          }
         }
 
-        // We only want to add the assistant message if the optimistic user message is still there
-        setMessages(prev => prev.find(m => m.id === optimisticUserMessage.id) ? [...prev.filter(m => m.id !== optimisticUserMessage.id), { ...optimisticUserMessage, id: String(Date.now()) }, assistantMessage] : [...prev, assistantMessage]);
+        setMessages(prev => [...prev, newAssistantMessage]);
     }
-    
-    setIsLoading(false);
   }
   
   if (!authChecked) {
