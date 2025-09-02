@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
 
 const formSchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.'),
@@ -21,13 +22,7 @@ const formSchema = z.object({
 
 export default function Home() {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      role: 'assistant',
-      content: 'am shop za africa ai assistant, how can i help you',
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -43,15 +38,60 @@ export default function Home() {
   };
 
   useEffect(() => {
+    const fetchMessages = async () => {
+      const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .order('created_at', { ascending: true });
+        
+      if (error) {
+        console.error('Error fetching messages:', error);
+        // Set a default initial message if fetching fails
+        setMessages([
+          {
+            id: '1',
+            role: 'assistant',
+            content: 'am shop za africa ai assistant, how can i help you',
+          },
+        ]);
+      } else {
+        if (data.length === 0) {
+           setMessages([
+            {
+              id: '1',
+              role: 'assistant',
+              content: 'am shop za africa ai assistant, how can i help you',
+            },
+          ]);
+        } else {
+          setMessages(data.map(m => ({ id: String(m.id), role: m.role, content: m.content })));
+        }
+      }
+    };
+    fetchMessages();
+  }, []);
+
+  useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const userInput = values.message;
-    
+    const userMessage: Omit<Message, 'id'> = { role: 'user', content: userInput };
+
+    const { data: userMessageData, error: userMessageError } = await supabase.from('messages').insert(userMessage).select().single();
+    if (userMessageError) {
+      toast({
+        variant: 'destructive',
+        title: 'Uh oh! Something went wrong.',
+        description: 'Failed to save your message.',
+      });
+      return;
+    }
+
     setMessages(prev => [
       ...prev,
-      { id: crypto.randomUUID(), role: 'user', content: userInput },
+      {...userMessage, id: String(userMessageData.id) },
     ]);
     setIsLoading(true);
     form.reset();
@@ -64,12 +104,24 @@ export default function Home() {
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
-      setMessages(prev => prev.slice(0, -1)); // Remove the user message if the call fails
+      await supabase.from('messages').delete().eq('id', userMessageData.id);
+      setMessages(prev => prev.slice(0, -1));
     } else {
-        setMessages(prev => [
-            ...prev,
-            { id: crypto.randomUUID(), role: 'assistant', content: result.data! },
-        ]);
+        const assistantMessage: Omit<Message, 'id'> = { role: 'assistant', content: result.data! };
+        const { data: assistantMessageData, error: assistantMessageError } = await supabase.from('messages').insert(assistantMessage).select().single();
+
+        if (assistantMessageError) {
+            toast({
+                variant: 'destructive',
+                title: 'Uh oh! Something went wrong.',
+                description: 'Failed to save the AI response.',
+            });
+        } else {
+            setMessages(prev => [
+                ...prev,
+                { ...assistantMessage, id: String(assistantMessageData.id) },
+            ]);
+        }
     }
     
     setIsLoading(false);
