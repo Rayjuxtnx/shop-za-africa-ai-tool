@@ -44,6 +44,9 @@ const initialMessage: Message = {
   content: 'am shop za africa ai assistant, how can i help you',
 };
 
+const GUEST_SESSION_ID_KEY = 'guest_session_id';
+const GUEST_MESSAGES_KEY = 'guest_messages';
+
 export default function HomePage() {
   const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
@@ -70,7 +73,14 @@ export default function HomePage() {
   };
   
   const handleNewChat = () => {
-    router.push('/');
+    if (user) {
+      router.push('/');
+    } else {
+      // For guests, clear local storage for a new chat
+      localStorage.removeItem(GUEST_SESSION_ID_KEY);
+      localStorage.removeItem(GUEST_MESSAGES_KEY);
+      setMessages([initialMessage]);
+    }
   };
 
   const fetchSessions = useCallback(async () => {
@@ -129,34 +139,46 @@ export default function HomePage() {
   useEffect(() => {
     if (user && authChecked) {
       fetchSessions();
+      // Clear guest data on login
+      localStorage.removeItem(GUEST_SESSION_ID_KEY);
+      localStorage.removeItem(GUEST_MESSAGES_KEY);
     }
   }, [user, authChecked, fetchSessions]);
 
-  // Fetch messages for active session
+  // Fetch messages for active session or guest session
   useEffect(() => {
     const fetchMessages = async () => {
-      if (user && activeSessionId) {
-        setIsLoading(true);
-        const { data, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('session_id', activeSessionId)
-          .order('created_at', { ascending: true });
-        setIsLoading(false);
+      if (user) { // Logged in user logic
+        if (activeSessionId) {
+          setIsLoading(true);
+          const { data, error } = await supabase
+            .from('messages')
+            .select('*')
+            .eq('session_id', activeSessionId)
+            .order('created_at', { ascending: true });
+          setIsLoading(false);
 
-        if (error) {
-          console.error('Error fetching messages:', error);
-          toast({
-            variant: 'destructive',
-            title: 'Error',
-            description: 'Could not fetch your chat history.'
-          });
-          setMessages([initialMessage]);
+          if (error) {
+            console.error('Error fetching messages:', error);
+            toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: 'Could not fetch your chat history.'
+            });
+            setMessages([initialMessage]);
+          } else {
+            setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
+          }
         } else {
-          setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
+          setMessages([initialMessage]);
         }
-      } else {
-        setMessages([initialMessage]);
+      } else { // Guest user logic
+        const guestMessages = localStorage.getItem(GUEST_MESSAGES_KEY);
+        if (guestMessages) {
+          setMessages(JSON.parse(guestMessages));
+        } else {
+          setMessages([initialMessage]);
+        }
       }
     };
     if (authChecked) {
@@ -188,51 +210,60 @@ export default function HomePage() {
     
     let currentSessionId = activeSessionId;
     let newMessages = [...currentMessages, optimisticUserMessage];
-
-    // If it's a new chat, create a session first
-    if (user && !currentSessionId) {
-      const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
-      const { data, error } = await supabase
-        .from('sessions')
-        .insert({ user_id: user.id, name: sessionName })
-        .select('id, name')
-        .single();
-
-      if (error) {
-        console.error('Error creating session', error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
-        setIsLoading(false);
-        return;
-      }
-      
-      currentSessionId = data.id;
-      setSessions(prev => [data as Session, ...prev]);
-      router.push(`/?session=${data.id}`, { scroll: false });
-      newMessages = [optimisticUserMessage]; // For a new chat, only show the new message
-    }
-    
     setMessages(newMessages);
 
-    // Save user message to DB if logged in
-    if (user && currentSessionId) {
-      const { error: messageError } = await supabase.from('messages').insert({
-        role: 'user',
-        content: userInput,
-        user_id: user.id,
-        session_id: currentSessionId,
-      });
+    // Session and message handling
+    if (user) {
+        // Logged-in user: use Supabase
+        if (!currentSessionId) {
+            const sessionName = userInput.substring(0, 25) + (userInput.length > 25 ? '...' : '');
+            const { data, error } = await supabase
+                .from('sessions')
+                .insert({ user_id: user.id, name: sessionName })
+                .select('id, name')
+                .single();
 
-      if (messageError) {
-        toast({
-          variant: 'destructive',
-          title: 'Uh oh! Something went wrong.',
-          description: 'Failed to save your message.',
+            if (error) {
+                console.error('Error creating session', error);
+                toast({ variant: 'destructive', title: 'Error', description: 'Could not start a new chat session.' });
+                setIsLoading(false);
+                setMessages(currentMessages); // Rollback
+                return;
+            }
+            
+            currentSessionId = data.id;
+            setSessions(prev => [data as Session, ...prev]);
+            router.push(`/?session=${data.id}`, { scroll: false });
+        }
+        
+        const { error: messageError } = await supabase.from('messages').insert({
+            role: 'user',
+            content: userInput,
+            user_id: user.id,
+            session_id: currentSessionId,
         });
-        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id)); // Rollback
-        setIsLoading(false);
-        return;
-      }
+
+        if (messageError) {
+            toast({
+                variant: 'destructive',
+                title: 'Uh oh! Something went wrong.',
+                description: 'Failed to save your message.',
+            });
+            setMessages(currentMessages); // Rollback
+            setIsLoading(false);
+            return;
+        }
+
+    } else {
+        // Guest user: use local storage
+        let guestSessionId = localStorage.getItem(GUEST_SESSION_ID_KEY);
+        if (!guestSessionId) {
+            guestSessionId = `guest_${Date.now()}`;
+            localStorage.setItem(GUEST_SESSION_ID_KEY, guestSessionId);
+        }
+        localStorage.setItem(GUEST_MESSAGES_KEY, JSON.stringify(newMessages));
     }
+
 
     const result = await getAiResponse({ history, question: userInput });
 
@@ -251,7 +282,11 @@ export default function HomePage() {
         content: assistantMessageContent,
       };
 
+      const finalMessages = [...newMessages, newAssistantMessage];
+      setMessages(finalMessages);
+
       if (user && currentSessionId) {
+        // Save assistant message for logged in user
         const { error } = await supabase.from('messages').insert({
           role: 'assistant',
           content: assistantMessageContent,
@@ -266,8 +301,10 @@ export default function HomePage() {
             description: 'Failed to save the AI response.',
           });
         }
+      } else {
+        // Save assistant message for guest
+        localStorage.setItem(GUEST_MESSAGES_KEY, JSON.stringify(finalMessages));
       }
-      setMessages(prev => [...prev, newAssistantMessage]);
     }
     setIsLoading(false);
   }
@@ -296,14 +333,14 @@ export default function HomePage() {
             </SidebarHeader>
             <SidebarContent className="p-2">
                 <SidebarMenu>
-                    {isLoadingHistory ? (
+                    {user && isLoadingHistory ? (
                         <>
                             <SidebarMenuSkeleton showIcon />
                             <SidebarMenuSkeleton showIcon />
                             <SidebarMenuSkeleton showIcon />
                         </>
                     ) : (
-                        sessions.map(session => (
+                        user && sessions.map(session => (
                             <SidebarMenuItem key={session.id}>
                                 <Link href={`/?session=${session.id}`}>
                                     <SidebarMenuButton
@@ -319,9 +356,11 @@ export default function HomePage() {
                     )}
                 </SidebarMenu>
             </SidebarContent>
-            <SidebarFooter>
-                <p className="text-xs text-muted-foreground text-center">Your chat history</p>
-            </SidebarFooter>
+            {user && (
+                <SidebarFooter>
+                    <p className="text-xs text-muted-foreground text-center">Your chat history</p>
+                </SidebarFooter>
+            )}
         </Sidebar>
       <SidebarInset className="flex h-screen flex-col bg-background">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
@@ -391,7 +430,7 @@ export default function HomePage() {
                 <Link href="/login" className="font-medium text-primary hover:underline">
                   Login
                 </Link>{' '}
-                to track your history.
+                to save your chat history permanently.
               </div>
             )}
             {messages.map(m => (
@@ -449,3 +488,5 @@ export default function HomePage() {
     </SidebarProvider>
   );
 }
+
+    
