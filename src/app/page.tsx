@@ -1,3 +1,4 @@
+
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -118,33 +119,42 @@ export default function Home() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const userInput = values.message;
-    const newMessages = messages[0]?.id === '0' ? [] : [...messages];
+    
+    // Optimistic UI update
     const optimisticUserMessage: Message = { 
         id: String(Date.now()), 
         role: 'user', 
         content: userInput 
     };
-
-    setMessages([...newMessages, optimisticUserMessage]);
+    const newMessages = messages[0]?.id === '0' ? [optimisticUserMessage] : [...messages, optimisticUserMessage];
+    setMessages(newMessages);
     
     setIsLoading(true);
     form.reset();
-    
-    const { error: userMessageError } = await supabase
-        .from('messages')
-        .insert({ role: 'user', content: userInput, user_id: user?.id ?? null });
 
-    if (userMessageError) {
-        toast({
-            variant: 'destructive',
-            title: 'Uh oh! Something went wrong.',
-            description: 'Failed to save your message.',
-        });
-        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
-        setIsLoading(false);
-        return;
+    // Save message if user is logged in or if it's a guest message
+    if (user || !user) {
+        const { error } = await supabase
+            .from('messages')
+            .insert({ 
+                role: 'user', 
+                content: userInput, 
+                user_id: user?.id ?? null 
+            });
+
+        if (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Uh oh! Something went wrong.',
+                description: 'Failed to save your message.',
+            });
+            // Revert optimistic update
+            setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+            setIsLoading(false);
+            return;
+        }
     }
-
+    
     const result = await getAiResponse(userInput);
     
     if (result.error) {
@@ -153,6 +163,7 @@ export default function Home() {
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
+      // Revert user message on AI error
        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
     } else {
         const assistantMessageContent = result.data!;
@@ -162,16 +173,23 @@ export default function Home() {
             content: assistantMessageContent
         };
         
-        const { error: assistantMessageError } = await supabase
-            .from('messages')
-            .insert({ role: 'assistant', content: assistantMessageContent, user_id: user?.id ?? null });
+        // Save assistant message if user is logged in or if it's a guest
+        if (user || !user) {
+            const { error } = await supabase
+                .from('messages')
+                .insert({ 
+                    role: 'assistant', 
+                    content: assistantMessageContent, 
+                    user_id: user?.id ?? null 
+                });
 
-        if (assistantMessageError) {
-            toast({
-                variant: 'destructive',
-                title: 'Uh oh! Something went wrong.',
-                description: 'Failed to save the AI response.',
-            });
+            if (error) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Uh oh! Something went wrong.',
+                    description: 'Failed to save the AI response.',
+                });
+            }
         }
         
         setMessages(prev => [...prev, newAssistantMessage]);
@@ -230,7 +248,7 @@ export default function Home() {
         </div>
       </header>
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl space-y-8 pb-16">
+        <div className="mx-auto max-w-3xl space-y-8 pb-32">
           {messages.map(m => (
             <ChatMessage key={m.id} message={m} />
           ))}
@@ -274,6 +292,10 @@ export default function Home() {
               </Button>
             </form>
           </Form>
+           <div className="mt-2 text-center text-xs text-muted-foreground">
+            <p>This message is encrypted. No other person can see your chats.</p>
+            <p>Avoid asking violating questions.</p>
+          </div>
         </div>
       </footer>
     </div>
