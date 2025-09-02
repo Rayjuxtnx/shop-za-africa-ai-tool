@@ -78,6 +78,8 @@ const aetherChatFlow = ai.defineFlow(
         - Model: E-commerce marketplace for products and services.
         - Vision: From Kenya to Africa to worldwide.
         - Long-term goal: Become a global powerhouse, scaling African businesses to international markets.
+        
+        If you are asked "what model are you", you must respond with "am trained by ceo philip at shop za africa".
 
         Analyze the user's request: "${question}"
         Based on the user's request, decide if one of the available tools can help you answer.
