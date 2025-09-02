@@ -78,7 +78,7 @@ export default function Home() {
         setUser(currentUser);
         if (_event === 'SIGNED_IN' && currentUser) {
             router.push('/');
-            setMessages([]);
+            setMessages([initialMessage]);
         }
         if (_event === 'SIGNED_OUT') {
             setMessages([initialMessage]);
@@ -142,7 +142,9 @@ export default function Home() {
         setMessages([initialMessage]);
       }
     };
-    fetchMessages();
+    if (user) {
+        fetchMessages();
+    }
   }, [user, activeSessionId, toast]);
 
   useEffect(() => {
@@ -163,7 +165,7 @@ export default function Home() {
     };
 
     const currentMessages = messages[0]?.id === '0' ? [] : messages;
-    const newMessages = [...currentMessages, optimisticUserMessage];
+    let newMessages = [...currentMessages, optimisticUserMessage];
     setMessages(newMessages);
     
     setIsLoading(true);
@@ -189,7 +191,9 @@ export default function Home() {
             }
             currentSessionId = data.id;
             setSessions(prev => [data as Session, ...prev]);
-            router.push(`/?session=${data.id}`);
+            router.push(`/?session=${data.id}`, { scroll: false });
+            newMessages = [optimisticUserMessage]; // Start new chat view
+            setMessages(newMessages);
         }
 
         const { error: messageError } = await supabase
@@ -264,44 +268,42 @@ export default function Home() {
 
   return (
     <SidebarProvider>
-      {user && (
-          <Sidebar>
-              <SidebarHeader>
-                  <Button variant="outline" className="w-full" onClick={handleNewChat}>
-                      <PlusCircle className="mr-2" />
-                      New Chat
-                  </Button>
-              </SidebarHeader>
-              <SidebarContent className="p-2">
-                  <SidebarMenu>
-                      {isLoadingHistory ? (
-                          <>
-                              <SidebarMenuSkeleton showIcon />
-                              <SidebarMenuSkeleton showIcon />
-                              <SidebarMenuSkeleton showIcon />
-                          </>
-                      ) : (
-                          sessions.map(session => (
-                              <SidebarMenuItem key={session.id}>
-                                  <Link href={`/?session=${session.id}`} legacyBehavior passHref>
-                                      <SidebarMenuButton
-                                          isActive={activeSessionId === session.id}
-                                          className="w-full justify-start"
-                                      >
-                                          <MessageSquare />
-                                          <span>{session.name}</span>
-                                      </SidebarMenuButton>
-                                  </Link>
-                              </SidebarMenuItem>
-                          ))
-                      )}
-                  </SidebarMenu>
-              </SidebarContent>
-              <SidebarFooter>
-                  <p className="text-xs text-muted-foreground text-center">Your chat history</p>
-              </SidebarFooter>
-          </Sidebar>
-      )}
+        <Sidebar>
+            <SidebarHeader>
+                <Button variant="outline" className="w-full" onClick={handleNewChat}>
+                    <PlusCircle className="mr-2" />
+                    New Chat
+                </Button>
+            </SidebarHeader>
+            <SidebarContent className="p-2">
+                <SidebarMenu>
+                    {isLoadingHistory ? (
+                        <>
+                            <SidebarMenuSkeleton showIcon />
+                            <SidebarMenuSkeleton showIcon />
+                            <SidebarMenuSkeleton showIcon />
+                        </>
+                    ) : (
+                        sessions.map(session => (
+                            <SidebarMenuItem key={session.id}>
+                                <Link href={`/?session=${session.id}`} legacyBehavior passHref>
+                                    <SidebarMenuButton
+                                        isActive={activeSessionId === session.id}
+                                        className="w-full justify-start"
+                                    >
+                                        <MessageSquare />
+                                        <span>{session.name}</span>
+                                    </SidebarMenuButton>
+                                </Link>
+                            </SidebarMenuItem>
+                        ))
+                    )}
+                </SidebarMenu>
+            </SidebarContent>
+            <SidebarFooter>
+                <p className="text-xs text-muted-foreground text-center">Your chat history</p>
+            </SidebarFooter>
+        </Sidebar>
       <SidebarInset className="flex h-screen flex-col bg-background">
         <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
           <div className="flex items-center gap-3">
@@ -361,7 +363,7 @@ export default function Home() {
             <div ref={messagesEndRef} />
           </div>
         </main>
-        <footer className="fixed bottom-0 left-0 right-0 border-t border-border/50 bg-card/20 p-2 backdrop-blur-sm md:p-4">
+        <footer className="fixed bottom-0 right-0 border-t border-border/50 bg-card/20 p-2 backdrop-blur-sm md:p-4 w-full md:w-[calc(100%_-_var(--sidebar-width))] transition-[width] duration-200 ease-linear group-data-[collapsible=icon]/sidebar-wrapper:md:w-[calc(100%_-_var(--sidebar-width-icon))] group-data-[collapsible=offcanvas]/sidebar-wrapper:md:w-full">
           <div className="mx-auto max-w-3xl">
             <Form {...form}>
               <form
@@ -408,5 +410,3 @@ export default function Home() {
     </SidebarProvider>
   );
 }
-
-    
