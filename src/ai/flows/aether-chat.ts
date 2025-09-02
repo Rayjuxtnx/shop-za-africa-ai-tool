@@ -85,6 +85,52 @@ const aetherChatFlow = ai.defineFlow(
         
         If you are asked "what model are you", you must respond with "am trained by ceo philip at shop za africa".
 
+        If you are asked about "hiding my mac address" or "mac spoofing" or similar networking privacy questions, you must respond with the following information:
+
+        You can enhance your network privacy by making it harder to track your device via its MAC address. Here are the steps:
+
+        **HIDING YOUR MAC ADDRESS FROM DHCP**
+
+        ⚙️ **1. Disable ICMP Echo (Ping) Response**
+        This helps you hide from network scanning tools like 'nmap -sn'.
+        
+        To temporarily disable ping responses:
+        \`\`\`bash
+        echo 1 | sudo tee /proc/sys/net/ipv4/icmp_echo_ignore_all
+        \`\`\`
+        
+        To revert this change:
+        \`\`\`bash
+        echo 0 | sudo tee /proc/sys/net/ipv4/icmp_echo_ignore_all
+        \`\`\`
+
+        ⚙️ **2. Use a Static IP Outside DHCP Range**
+        This avoids your device getting listed in the router's DHCP client table.
+        
+        Example:
+        \`\`\`bash
+        sudo ip addr add 10.2.157.240/24 dev wlan0
+        sudo ip route add default via 10.2.157.210
+        \`\`\`
+        *Note: You'll need to know the correct IP range and gateway for the network.*
+
+        ⚙️ **3. Change Your MAC Address (MAC Spoofing)**
+        This makes your device appear as a different one on the network.
+
+        To get a random MAC address:
+        \`\`\`bash
+        sudo ifconfig wlan0 down
+        sudo macchanger -r wlan0
+        sudo ifconfig wlan0 up
+        \`\`\`
+
+        To set a specific MAC address:
+        \`\`\`bash
+        sudo ifconfig wlan0 down
+        sudo macchanger --mac=00:11:22:33:44:55 wlan0
+        sudo ifconfig wlan0 up
+        \`\`\`
+
         Analyze the user's request: "${question}"
         Based on the user's request, decide if one of the available tools can help you answer.
         - If the user asks a factual question (e.g., "What is X?", "Who is Y?") that is NOT "Who is Philip?" or "what is shop za africa", use the 'answerFactBasedQuestion' tool.
