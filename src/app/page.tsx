@@ -64,7 +64,7 @@ export default function Home() {
             },
           ]);
         } else {
-          setMessages(data.map(m => ({ id: String(m.id), role: m.role, content: m.content })));
+          setMessages(data.map(m => ({ id: String(m.id), role: m.role as 'user' | 'assistant', content: m.content })));
         }
       }
     };
