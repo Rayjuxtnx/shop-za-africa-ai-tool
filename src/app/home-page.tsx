@@ -182,7 +182,7 @@ export default function HomePage() {
     };
 
     const currentMessages = messages[0]?.id === '0' ? [] : messages;
-    const history = currentMessages.map(({ role, content }) => ({ role, content }));
+    const history = currentMessages.map(({ role, content }) => ({ role: role as 'user' | 'assistant', content }));
     let newMessages = [...currentMessages, optimisticUserMessage];
     setMessages(newMessages);
     
@@ -443,6 +443,7 @@ export default function HomePage() {
               </form>
             </Form>
              <div className="mt-2 text-center text-xs text-muted-foreground">
+              <p>Created by Philip Otieno.</p>
               <p>This message is encrypted. No other person can see your chats.</p>
               <p>Avoid asking violating questions.</p>
             </div>
