@@ -2,11 +2,14 @@
 
 import {ai} from '@/ai/genkit';
 import {
-  answerFactBasedQuestion,
-} from './answer-fact-based-questions';
-import {summarizeText} from './summarize-text';
-import { AnswerFactBasedQuestionInputSchema, SummarizeTextInputSchema } from '@/ai/schemas';
+  AnswerFactBasedQuestionInputSchema,
+  CreativeWritingInputSchema,
+  SummarizeTextInputSchema,
+} from '@/ai/schemas';
 import {z} from 'genkit';
+import {answerFactBasedQuestion} from './answer-fact-based-questions';
+import {creativeWriting} from './creative-writing';
+import {summarizeText} from './summarize-text';
 
 const factQuestionTool = ai.defineTool(
   {
@@ -35,6 +38,20 @@ const summarizeTool = ai.defineTool(
   }
 );
 
+const creativeWritingTool = ai.defineTool(
+  {
+    name: 'creativeWriting',
+    description:
+      'Use to write a creative piece like a story or poem about a topic.',
+    inputSchema: CreativeWritingInputSchema,
+    outputSchema: z.string(),
+  },
+  async ({topic}) => {
+    const result = await creativeWriting({topic});
+    return result.creativeText;
+  }
+);
+
 const aetherChatFlow = ai.defineFlow(
   {
     name: 'aetherChatFlow',
@@ -49,14 +66,15 @@ const aetherChatFlow = ai.defineFlow(
         Based on the user's request, decide if one of the available tools can help you answer.
         - If the user asks a factual question (e.g., "What is X?", "Who is Y?"), use the 'answerFactBasedQuestion' tool.
         - If the user provides a block of text and asks to summarize it, use the 'summarizeText' tool.
+        - If the user asks to write a story or poem, use the 'creativeWriting' tool.
         If you use a tool, its output will be your final answer.
         If no tool is suitable, provide a helpful, conversational response directly.
         Do not ask clarifying questions about which tool to use. Make the decision yourself.`,
-      tools: [factQuestionTool, summarizeTool],
+      tools: [factQuestionTool, summarizeTool, creativeWritingTool],
       model: 'googleai/gemini-2.5-flash',
     });
 
-    const toolUse = await llmResponse.toolRequest();
+    const toolUse = llmResponse.toolRequest();
     if (toolUse) {
       const toolResponse = await toolUse.run();
       const llmResponse2 = await ai.generate({
@@ -66,15 +84,16 @@ const aetherChatFlow = ai.defineFlow(
         Based on the user's request, decide if one of the available tools can help you answer.
         - If the user asks a factual question (e.g., "What is X?", "Who is Y?"), use the 'answerFactBasedQuestion' tool.
         - If the user provides a block of text and asks to summarize it, use the 'summarizeText' tool.
+        - If the user asks to write a story or poem, use the 'creativeWriting' tool.
         If you use a tool, its output will be your final answer.
         If no tool is suitable, provide a helpful, conversational response directly.
         Do not ask clarifying questions about which tool to use. Make the decision yourself.`,
-        tools: [factQuestionTool, summarizeTool],
+        tools: [factQuestionTool, summarizeTool, creativeWritingTool],
         model: 'googleai/gemini-2.5-flash',
         history: [
           {role: 'user', content: [{text: question}]},
           llmResponse.message,
-          {role: 'tool', content: [{toolResponse}]},
+          {role: 'tool', content: [toolResponse]},
         ],
       });
       return llmResponse2.text;

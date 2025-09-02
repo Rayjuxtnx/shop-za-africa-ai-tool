@@ -27,3 +27,15 @@ export const SummarizeTextOutputSchema = z.object({
   summary: z.string().describe('The summary of the text.'),
 });
 export type SummarizeTextOutput = z.infer<typeof SummarizeTextOutputSchema>;
+
+export const CreativeWritingInputSchema = z.object({
+  topic: z.string().describe('The topic for the creative writing piece.'),
+});
+export type CreativeWritingInput = z.infer<typeof CreativeWritingInputSchema>;
+
+export const CreativeWritingOutputSchema = z.object({
+  creativeText: z
+    .string()
+    .describe('The generated creative text (story, poem, etc.).'),
+});
+export type CreativeWritingOutput = z.infer<typeof CreativeWritingOutputSchema>;
