@@ -1,7 +1,7 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { SendHorizonal, Bot, LogOut } from 'lucide-react';
+import { Bot, LogIn, LogOut, SendHorizonal, UserPlus } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -15,6 +15,7 @@ import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 const formSchema = z.object({
   message: z.string().min(1, 'Message cannot be empty.'),
@@ -28,10 +29,11 @@ const initialMessage: Message = {
 
 export default function Home() {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -46,28 +48,51 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-      } else {
-        setUser(user);
-      }
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setUser(session?.user ?? null);
+      setAuthChecked(true);
     };
-    getUser();
-  }, [router]);
+
+    checkUser();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        if (_event === 'SIGNED_IN') {
+            // On sign-in, clear guest messages and fetch user's history
+            setMessages([]);
+        }
+        if (_event === 'SIGNED_OUT') {
+            // On sign-out, revert to initial guest state
+            setMessages([initialMessage]);
+        }
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (user) {
       const fetchMessages = async () => {
+        setIsLoading(true);
         const { data, error } = await supabase
           .from('messages')
           .select('*')
           .eq('user_id', user.id)
           .order('created_at', { ascending: true });
+        setIsLoading(false);
 
         if (error) {
           console.error('Error fetching messages:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Could not fetch your chat history.'
+          });
           setMessages([initialMessage]);
         } else {
           if (data.length === 0) {
@@ -78,53 +103,55 @@ export default function Home() {
         }
       };
       fetchMessages();
+    } else {
+        // Guest user, reset to initial message if needed
+        if(messages.length === 0 || messages[0].id !== '0') {
+            setMessages([initialMessage]);
+        }
     }
-  }, [user]);
+  }, [user, toast]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/login');
+    router.push('/'); // Go to home page as guest
   };
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
-    if (!user) {
-        toast({
-            variant: 'destructive',
-            title: 'Authentication Error',
-            description: 'You must be logged in to send a message.',
-        });
-        return;
-    }
-
     const userInput = values.message;
-    const userMessage: Omit<Message, 'id'> & { user_id: string } = { role: 'user', content: userInput, user_id: user.id };
+    const optimisticUserMessage: Message = { 
+        id: String(Date.now()), 
+        role: 'user', 
+        content: userInput 
+    };
 
-    const tempId = String(Date.now());
-    const optimisticUserMessage = { ...userMessage, id: tempId };
-    const newMessages = messages.filter(m => m.id !== '0');
+    const newMessages = messages[0]?.id === '0' ? [] : messages;
     setMessages(prev => [...newMessages, optimisticUserMessage]);
-
+    
     setIsLoading(true);
     form.reset();
 
-    const { data: userMessageData, error: userMessageError } = await supabase.from('messages').insert(userMessage).select().single();
-    
-    if (userMessageError) {
-      toast({
-        variant: 'destructive',
-        title: 'Uh oh! Something went wrong.',
-        description: 'Failed to save your message.',
-      });
-      setMessages(prev => prev.filter(m => m.id !== tempId));
-      setIsLoading(false);
-      return;
-    }
+    // If user is logged in, save message to DB
+    if (user) {
+        const { error: userMessageError } = await supabase
+            .from('messages')
+            .insert({ role: 'user', content: userInput, user_id: user.id });
 
-    setMessages(prev => prev.map(m => m.id === tempId ? { ...m, id: String(userMessageData.id) } : m));
+        if (userMessageError) {
+            toast({
+                variant: 'destructive',
+                title: 'Uh oh! Something went wrong.',
+                description: 'Failed to save your message.',
+            });
+            // Revert optimistic update
+            setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+            setIsLoading(false);
+            return;
+        }
+    }
 
     const result = await getAiResponse(userInput);
     
@@ -134,30 +161,38 @@ export default function Home() {
         title: 'Uh oh! Something went wrong.',
         description: result.error,
       });
-      await supabase.from('messages').delete().eq('id', userMessageData.id);
-      setMessages(prev => prev.filter(m => m.id !== String(userMessageData.id)));
+       // Revert optimistic update
+       setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
     } else {
-        const assistantMessage: Omit<Message, 'id'> & { user_id: string } = { role: 'assistant', content: result.data!, user_id: user.id };
-        const { data: assistantMessageData, error: assistantMessageError } = await supabase.from('messages').insert(assistantMessage).select().single();
+        const assistantMessageContent = result.data!;
+        const assistantMessage: Message = {
+            id: String(Date.now() + 1),
+            role: 'assistant',
+            content: assistantMessageContent
+        };
+        
+        // If user is logged in, save AI response to DB
+        if (user) {
+             const { error: assistantMessageError } = await supabase
+                .from('messages')
+                .insert({ role: 'assistant', content: assistantMessageContent, user_id: user.id });
 
-        if (assistantMessageError) {
-            toast({
-                variant: 'destructive',
-                title: 'Uh oh! Something went wrong.',
-                description: 'Failed to save the AI response.',
-            });
-        } else {
-            setMessages(prev => [
-                ...prev,
-                { ...assistantMessage, id: String(assistantMessageData.id) },
-            ]);
+            if (assistantMessageError) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Uh oh! Something went wrong.',
+                    description: 'Failed to save the AI response.',
+                });
+            }
         }
+
+        setMessages(prev => [...prev, assistantMessage]);
     }
     
     setIsLoading(false);
   }
   
-  if (!user) {
+  if (!authChecked) {
     return (
         <div className="flex h-full w-full items-center justify-center bg-background">
             <ChatMessageLoading />
@@ -174,10 +209,28 @@ export default function Home() {
           </div>
           <h1 className="text-xl font-bold tracking-tight text-foreground">Philip Assistant</h1>
         </div>
-        <Button variant="ghost" size="icon" onClick={handleLogout}>
-            <LogOut className="h-5 w-5" />
-            <span className="sr-only">Log out</span>
-        </Button>
+        <div className="flex items-center gap-2">
+            {user ? (
+                <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Log out">
+                    <LogOut className="h-5 w-5" />
+                </Button>
+            ) : (
+                <>
+                    <Button asChild variant="ghost" size="sm">
+                        <Link href="/login">
+                            <LogIn className="mr-2" />
+                            Login
+                        </Link>
+                    </Button>
+                    <Button asChild size="sm">
+                        <Link href="/signup">
+                            <UserPlus className="mr-2" />
+                            Sign Up
+                        </Link>
+                    </Button>
+                </>
+            )}
+        </div>
       </header>
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mx-auto max-w-3xl space-y-8">
