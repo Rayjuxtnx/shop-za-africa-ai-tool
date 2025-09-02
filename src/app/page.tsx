@@ -29,7 +29,7 @@ const initialMessage: Message = {
 
 export default function Home() {
   const { toast } = useToast();
-  const [messages, setMessages] = useState<Message[]>([initialMessage]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -58,8 +58,9 @@ export default function Home() {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
-        if (_event === 'SIGNED_IN') {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (_event === 'SIGNED_IN' && currentUser) {
             setMessages([]);
         }
         if (_event === 'SIGNED_OUT') {
@@ -102,11 +103,9 @@ export default function Home() {
       };
       fetchMessages();
     } else {
-        // For guest users, always start with the initial message.
         setMessages([initialMessage]);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, toast]);
 
   useEffect(() => {
     scrollToBottom();
@@ -119,37 +118,48 @@ export default function Home() {
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     const userInput = values.message;
+    const newMessages = messages[0]?.id === '0' ? [] : [...messages];
     const optimisticUserMessage: Message = { 
         id: String(Date.now()), 
         role: 'user', 
         content: userInput 
     };
 
-    // Replace initial message if it exists
-    const newMessages = messages[0]?.id === '0' ? [] : messages;
     setMessages([...newMessages, optimisticUserMessage]);
     
     setIsLoading(true);
     form.reset();
+    
+    if (user) {
+      const { error: userMessageError } = await supabase
+          .from('messages')
+          .insert({ role: 'user', content: userInput, user_id: user.id });
 
-    // Save user message
-    const { error: userMessageError } = await supabase
+      if (userMessageError) {
+          toast({
+              variant: 'destructive',
+              title: 'Uh oh! Something went wrong.',
+              description: 'Failed to save your message.',
+          });
+          setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
+          setIsLoading(false);
+          return;
+      }
+    } else {
+       const { error: guestMessageError } = await supabase
         .from('messages')
-        .insert({ role: 'user', content: userInput, user_id: user?.id ?? null });
-
-    if (userMessageError) {
-        toast({
-            variant: 'destructive',
-            title: 'Uh oh! Something went wrong.',
-            description: 'Failed to save your message.',
-        });
-        setMessages(prev => prev.filter(m => m.id !== optimisticUserMessage.id));
-        setIsLoading(false);
-        return;
+        .insert({ role: 'user', content: userInput, user_id: null });
+        if (guestMessageError) {
+             toast({
+              variant: 'destructive',
+              title: 'Uh oh! Something went wrong.',
+              description: 'Failed to save guest message.',
+          });
+        }
     }
 
+
     const result = await getAiResponse(userInput);
-    setIsLoading(false);
     
     if (result.error) {
       toast({
@@ -166,21 +176,35 @@ export default function Home() {
             content: assistantMessageContent
         };
         
-        // Save assistant message
-        const { error: assistantMessageError } = await supabase
-            .from('messages')
-            .insert({ role: 'assistant', content: assistantMessageContent, user_id: user?.id ?? null });
+        if (user) {
+            const { error: assistantMessageError } = await supabase
+                .from('messages')
+                .insert({ role: 'assistant', content: assistantMessageContent, user_id: user.id });
 
-        if (assistantMessageError) {
-            toast({
-                variant: 'destructive',
-                title: 'Uh oh! Something went wrong.',
-                description: 'Failed to save the AI response.',
-            });
+            if (assistantMessageError) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Uh oh! Something went wrong.',
+                    description: 'Failed to save the AI response.',
+                });
+            }
+        } else {
+            const { error: guestAssistantMessageError } = await supabase
+            .from('messages')
+            .insert({ role: 'assistant', content: assistantMessageContent, user_id: null });
+
+            if (guestAssistantMessageError) {
+                 toast({
+                    variant: 'destructive',
+                    title: 'Uh oh! Something went wrong.',
+                    description: 'Failed to save guest AI response.',
+                });
+            }
         }
 
         setMessages(prev => [...prev, newAssistantMessage]);
     }
+    setIsLoading(false);
   }
   
   if (!authChecked) {
@@ -192,7 +216,7 @@ export default function Home() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-screen flex-col bg-background">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-4 bg-card/20 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-primary/10 rounded-full">
@@ -207,16 +231,26 @@ export default function Home() {
                 </Button>
             ) : (
                 <>
-                    <Button asChild variant="ghost" size="sm">
+                    <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
                         <Link href="/login">
                             <LogIn className="mr-2 h-4 w-4" />
                             Login
                         </Link>
                     </Button>
-                    <Button asChild size="sm">
+                    <Button asChild size="sm" className="hidden sm:inline-flex">
                         <Link href="/signup">
                             <UserPlus className="mr-2 h-4 w-4" />
                             Sign Up
+                        </Link>
+                    </Button>
+                     <Button asChild variant="ghost" size="icon" className="sm:hidden">
+                        <Link href="/login">
+                            <LogIn className="h-5 w-5" />
+                        </Link>
+                    </Button>
+                    <Button asChild size="icon" className="sm:hidden">
+                        <Link href="/signup">
+                            <UserPlus className="h-5 w-5" />
                         </Link>
                     </Button>
                 </>
@@ -224,7 +258,7 @@ export default function Home() {
         </div>
       </header>
       <main className="flex-1 overflow-y-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl space-y-8">
+        <div className="mx-auto max-w-3xl space-y-8 pb-16">
           {messages.map(m => (
             <ChatMessage key={m.id} message={m} />
           ))}
@@ -232,12 +266,12 @@ export default function Home() {
           <div ref={messagesEndRef} />
         </div>
       </main>
-      <footer className="border-t border-border/50 bg-card/20 p-4 backdrop-blur-sm">
+      <footer className="fixed bottom-0 left-0 right-0 border-t border-border/50 bg-card/20 p-2 backdrop-blur-sm md:p-4">
         <div className="mx-auto max-w-3xl">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
-              className="flex items-start gap-4"
+              className="flex items-start gap-2 md:gap-4"
             >
               <FormField
                 control={form.control}
